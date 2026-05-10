@@ -1,12 +1,16 @@
 # Load required libraries
 from fastapi import FastAPI
 from models import Product
+from database import session, engine
+import db_models
 
 # Initialize the FastAPI app
 app = FastAPI()
 
+db_models.Base.metadata.create_all(bind=engine)
+
 # Define a route for the root endpoint
-@app.get("/")
+@app.get("/") 
 def read_root():
     return {"message": "Hello, World!"}
 
@@ -17,10 +21,24 @@ products = [
     {"id": 4, "name": "watch", "description": "This is a watch", "price": 40.0, "quantity": 10}
 ]
 
+# function to initialize the database with initial data
+def init_db():
+    db = session()
+    for product in products:
+        db.add(db_models.Product(**product))
+    db.commit()
+    
+# call the init_db function to populate the database with initial data
+init_db()
+
 # Get all products
 @app.get("/products")
 def get_products():
     return products
+    # db connection
+    # db = session()
+    # query
+    # db.query()
 
 # Get a product by its ID
 @app.get("/product/{id}")
