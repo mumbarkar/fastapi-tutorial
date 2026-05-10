@@ -1,5 +1,6 @@
 # Load required libraries
 from fastapi import FastAPI
+from models import Product
 
 # Initialize the FastAPI app
 app = FastAPI()
@@ -16,13 +17,40 @@ products = [
     {"id": 4, "name": "watch", "description": "This is a watch", "price": 40.0, "quantity": 10}
 ]
 
+# Get all products
 @app.get("/products")
 def get_products():
     return products
 
+# Get a product by its ID
 @app.get("/product/{id}")
 def get_product(id: int):
     for product in products:
         if product["id"] == id:
             return product
+    return {"message": "Product not found"}
+
+# Add a new product to the list
+@app.post("/product")
+def add_product(product: Product):
+    products.append(product)
+    return {"message": "Product added successfully", "product": product}
+
+# Update an existing product
+@app.put("/product/{id}")
+def update_product(id: int, product: Product):
+    for i in range(len(products)):
+        if products[i]["id"] == id:
+            products[i] = product
+            return {"message": "Product updated successfully", "product": product}
+    return {"message": "Product not found"}
+
+# Delete a product
+@app.delete("/product/{id}")
+def delete_product(id: int):
+    global products
+    for i in range(len(products)):
+        if products[i]["id"] == id:
+            del products[i]
+            return {"message": "Product deleted successfully"}
     return {"message": "Product not found"}
