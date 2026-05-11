@@ -1,11 +1,20 @@
 # Load required libraries
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from models import Product
 from database import session, engine
 import db_models
+from sqlalchemy.orm import Session
 
 # Initialize the FastAPI app
 app = FastAPI()
+
+# Configure CORS middleware to allow requests from the frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Adjust this to your frontend URL
+    allow_methods=["*"]
+)
 
 db_models.Base.metadata.create_all(bind=engine)
 
@@ -21,54 +30,70 @@ products = [
     {"id": 4, "name": "watch", "description": "This is a watch", "price": 40.0, "quantity": 10}
 ]
 
+# Dependency to get a database session
+def get_db():
+    db = session()
+    try:
+        yield db
+    finally:
+        db.close()
+        
 # function to initialize the database with initial data
 def init_db():
     db = session()
-    for product in products:
-        db.add(db_models.Product(**product))
-    db.commit()
+    count = db.query(db_models.Product).count()
+    
+    if count == 0:
+        for product in products:
+            db.add(db_models.Product(**product))
+        db.commit()
     
 # call the init_db function to populate the database with initial data
 init_db()
 
 # Get all products
 @app.get("/products")
-def get_products():
-    return products
-    # db connection
-    # db = session()
-    # query
-    # db.query()
+def get_products(db: Session = Depends(get_db)):
+    db_products = db.query(db_models.Product).all()
+    return db_products
 
 # Get a product by its ID
-@app.get("/product/{id}")
-def get_product(id: int):
-    for product in products:
-        if product["id"] == id:
-            return product
+@app.get("/products/{id}")
+def get_product(id: int, db: Session = Depends(get_db)):
+    db_product = db.query(db_models.Product).filter(db_models.Product.id == id).first()
+    
+    if db_product:
+        return db_product
+    
     return {"message": "Product not found"}
 
 # Add a new product to the list
-@app.post("/product")
-def add_product(product: Product):
-    products.append(product)
-    return {"message": "Product added successfully", "product": product}
+@app.post("/products")
+def add_product(product: Product, db: Session = Depends(get_db)):
+    db_product = db_models.Product(**product.dict())
+    db.add(db_product)
+    db.commit()
+    db.refresh(db_product)
+    return db_product
 
 # Update an existing product
-@app.put("/product/{id}")
-def update_product(id: int, product: Product):
-    for i in range(len(products)):
-        if products[i]["id"] == id:
-            products[i] = product
-            return {"message": "Product updated successfully", "product": product}
-    return {"message": "Product not found"}
+@app.put("/products/{id}")
+def update_product(id: int, product: Product, db: Session = Depends(get_db)):
+    db_product = db.query(db_models.Product).filter(db_models.Product.id == id).first()
+    if not db_product:
+        return {"message": "Product not found"}
+    for key, value in product.dict().items():
+        setattr(db_product, key, value)
+    db.commit()
+    db.refresh(db_product)
+    return {"message": "Product updated successfully", "product": db_product}
 
 # Delete a product
-@app.delete("/product/{id}")
-def delete_product(id: int):
-    global products
-    for i in range(len(products)):
-        if products[i]["id"] == id:
-            del products[i]
-            return {"message": "Product deleted successfully"}
-    return {"message": "Product not found"}
+@app.delete("/products/{id}")
+def delete_product(id: int, db: Session = Depends(get_db)):
+    db_product = db.query(db_models.Product).filter(db_models.Product.id == id).first()
+    if not db_product:
+        return {"message": "Product not found"}
+    db.delete(db_product)
+    db.commit()
+    return {"message": "Product deleted successfully"}
